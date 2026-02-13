@@ -1,40 +1,43 @@
+import time
 from app.db.supabase import supabase
 from app.services.verification_service import verify_or_fetch_bureau
-from app.services.recommendation_service import recommend
+from app.services.recommendation_service import generate_full_recommendations
 
 
-def run_auto_processing():
+def process_clients():
 
-    # 1️⃣ Fetch all clients
-    clients = (
-        supabase
-        .table("clients")
-        .select("*")
-        .execute()
-        .data
-    )
+    while True:
+        try:
 
-    for client in clients:
+            clients = (
+                supabase
+                .table("clients")
+                .select("*")
+                .execute()
+                .data
+            )
 
-        if not client.get("primary_interest"):
-            continue
+            for client in clients:
 
-        # 2️⃣ Ensure bureau verified
-        verify_or_fetch_bureau(client)
+                if not client.get("primary_interest"):
+                    continue
 
-        # 3️⃣ Check if recommendation exists
-        existing = (
-            supabase
-            .table("recommendations")
-            .select("id")
-            .eq("user_id", client["id"])
-            .eq("selected_option", int(client["primary_interest"]))
-            .execute()
-            .data
-        )
+                # Check bureau exists
+                bureau = (
+                    supabase
+                    .table("bureau_profiles")
+                    .select("user_id")
+                    .eq("user_id", client["id"])
+                    .execute()
+                    .data
+                )
 
-        if existing:
-            continue
+                if not bureau:
+                    verify_or_fetch_bureau(client)
 
-        # 4️⃣ Generate recommendation
-        recommend(client)
+                generate_full_recommendations(client)
+
+        except Exception as e:
+            print("Auto processor error:", e)
+
+        time.sleep(10)  # Every 10 seconds
